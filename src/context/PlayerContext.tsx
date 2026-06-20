@@ -157,9 +157,13 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
 
   // Init audio element
   useEffect(() => {
-    const a = document.createElement("video");
+    // Use a real <audio> element so playback continues when the tab/app is backgrounded
+    // (mobile browsers suspend hidden <video> elements but keep <audio> alive).
+    const a = document.createElement("audio");
     a.preload = "auto";
-    a.playsInline = true;
+    (a as HTMLMediaElement & { playsInline?: boolean }).playsInline = true;
+    a.setAttribute("playsinline", "");
+    a.crossOrigin = "anonymous";
     a.style.display = "none";
     document.body.appendChild(a);
     audioRef.current = a;
@@ -252,8 +256,47 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
           audioRef.current.currentTime = details.seekTime;
         }
       });
+      navigator.mediaSession.setActionHandler("seekbackward", (details) => {
+        const a = audioRef.current;
+        if (!a) return;
+        a.currentTime = Math.max(0, a.currentTime - (details.seekOffset ?? 10));
+      });
+      navigator.mediaSession.setActionHandler("seekforward", (details) => {
+        const a = audioRef.current;
+        if (!a) return;
+        a.currentTime = Math.min(a.duration || a.currentTime, a.currentTime + (details.seekOffset ?? 10));
+      });
+      try {
+        navigator.mediaSession.setActionHandler("stop", () => {
+          audioRef.current?.pause();
+        });
+      } catch { /* not supported */ }
     }
   }, []);
+
+  // Screen Wake Lock — keep the radio playing when the screen would otherwise sleep
+  // (the OS still allows backgrounded <audio>, this just stops aggressive throttling).
+  useEffect(() => {
+    if (typeof navigator === "undefined") return;
+    const nav = navigator as Navigator & { wakeLock?: { request: (t: "screen") => Promise<any> } };
+    if (!nav.wakeLock) return;
+    let sentinel: any = null;
+    let cancelled = false;
+    const acquire = async () => {
+      if (!isPlaying) return;
+      try {
+        sentinel = await nav.wakeLock!.request("screen");
+      } catch { /* user gesture missing or denied */ }
+    };
+    const onVisible = () => { if (!cancelled && document.visibilityState === "visible") void acquire(); };
+    document.addEventListener("visibilitychange", onVisible);
+    void acquire();
+    return () => {
+      cancelled = true;
+      document.removeEventListener("visibilitychange", onVisible);
+      try { sentinel?.release?.(); } catch { /* ignore */ }
+    };
+  }, [isPlaying]);
 
   // Count minutes (every 60s of play)
   useEffect(() => {

@@ -2,6 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { Pause, Play, Loader2, Heart, Moon, X } from "lucide-react";
 import { usePlayer } from "@/context/PlayerContext";
 import { FastImage } from "./FastImage";
+import { Equalizer } from "./Equalizer";
 
 export function MiniPlayer() {
   const { current, isPlaying, loading, toggle, position, duration, toggleLike, isLiked, sleepTimer, loopMode, clear } = usePlayer();
@@ -26,6 +27,11 @@ export function MiniPlayer() {
               {current.thumbnail ? (
                 <FastImage src={current.thumbnail} alt="" eager sizes="44px" className="h-full w-full object-cover" />
               ) : null}
+              {isPlaying && !loading && (
+                <div className="absolute inset-0 flex items-end justify-center bg-black/40 pb-1">
+                  <Equalizer active />
+                </div>
+              )}
             </div>
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-semibold">{current.title}</p>
