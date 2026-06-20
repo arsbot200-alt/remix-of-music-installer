@@ -8,13 +8,21 @@ import { AppShell } from "@/components/AppShell";
 import { Equalizer } from "@/components/Equalizer";
 import { Link } from "@tanstack/react-router";
 import { SongMenu } from "@/components/SongMenu";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 const artistQuery = (id: string) =>
   queryOptions({
     queryKey: ["yt", "artist", id],
     queryFn: () => ytArtist({ data: { id } }),
     staleTime: 1000 * 60 * 30,
+  });
+
+const artistSearchQuery = (name: string) =>
+  queryOptions({
+    queryKey: ["yt", "artist-search", name.toLowerCase()],
+    queryFn: () => ytSearch({ data: { query: name } }),
+    staleTime: 1000 * 60 * 30,
+    enabled: !!name && name !== "Artist",
   });
 
 export const Route = createFileRoute("/artist/$id")({
@@ -24,8 +32,14 @@ export const Route = createFileRoute("/artist/$id")({
       { name: "description", content: `Top songs and albums by ${(loaderData as any)?.name ?? "this artist"}.` },
     ],
   }),
-  loader: ({ context, params }) =>
-    context.queryClient.ensureQueryData(artistQuery(params.id)),
+  loader: async ({ context, params }) => {
+    const data = await context.queryClient.ensureQueryData(artistQuery(params.id));
+    // Kick off the artist's discography search in parallel (don't await)
+    if (data?.name && data.name !== "Artist") {
+      context.queryClient.prefetchQuery(artistSearchQuery(data.name));
+    }
+    return data;
+  },
   component: ArtistPage,
   errorComponent: ({ error }) => <div className="p-6 text-sm">Couldn't load: {error.message}</div>,
   notFoundComponent: () => <div className="p-6">Not found</div>,
@@ -72,15 +86,26 @@ function ArtistPage() {
     id: s.id, title: s.title, artist: s.artist, thumbnail: s.thumbnail,
   }));
 
-  // Fetch ALL songs by searching the artist name
-  const allSongsQuery = useQuery({
-    queryKey: ["yt", "artist-all-songs", data.name],
-    queryFn: () => ytSearch({ data: { query: data.name } }),
-    staleTime: 1000 * 60 * 30,
-    enabled: !!data.name && data.name !== "Artist",
-  });
+  // Fetch ALL songs by searching the artist name (already prefetched in loader)
+  const allSongsQuery = useQuery(artistSearchQuery(data.name));
 
-  const allSongs = allSongsQuery.data?.songs ?? [];
+  // Filter strictly to tracks where this artist is primary OR featured.
+  // Drop unrelated recommendations YouTube Music throws in.
+  const artistNameLower = data.name.toLowerCase().trim();
+  const ownIds = new Set(data.songs.map((s) => s.id));
+
+  const allSongs = useMemo(() => {
+    const raw = allSongsQuery.data?.songs ?? [];
+    return raw.filter((s) => {
+      if (ownIds.has(s.id)) return false; // already shown in Top Songs
+      const artists = s.artist.toLowerCase();
+      if (!artists) return false;
+      // Split on common separators and check if any credited artist matches
+      const parts = artists.split(/,|&|feat\.?|ft\.?|×|x | with |\bwith\b/i).map((p) => p.trim()).filter(Boolean);
+      return parts.some((p) => p === artistNameLower || p.startsWith(artistNameLower + " ") || p.endsWith(" " + artistNameLower));
+    });
+  }, [allSongsQuery.data, artistNameLower, ownIds]);
+
   const allSongsQueue: Track[] = allSongs.map((s) => ({
     id: s.id, title: s.title, artist: s.artist, thumbnail: s.thumbnail,
   }));
@@ -227,9 +252,19 @@ function ArtistPage() {
 
       {/* All Songs (from search) */}
       <section className="mt-7 px-5 pb-8">
-        <h2 className="mb-2 text-base font-bold">All Songs</h2>
+        <h2 className="mb-2 text-base font-bold">More by {data.name}</h2>
         {allSongsQuery.isLoading ? (
-          <p className="py-4 text-center text-xs text-muted-foreground">Loading all songs…</p>
+          <ul className="space-y-2">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <li key={i} className="flex items-center gap-3 p-2">
+                <div className="h-12 w-12 shrink-0 rounded-md fast-img" />
+                <div className="flex-1 space-y-2">
+                  <div className="h-3 w-3/4 rounded fast-img" />
+                  <div className="h-2.5 w-1/2 rounded fast-img" />
+                </div>
+              </li>
+            ))}
+          </ul>
         ) : allSongs.length === 0 ? (
           <p className="py-4 text-center text-xs text-muted-foreground">No additional songs found.</p>
         ) : (
