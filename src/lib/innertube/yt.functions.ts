@@ -198,7 +198,7 @@ async function getHelloSummerSongs(yt: any): Promise<HomeSection> {
 }
 
 export const ytHome = createServerFn({ method: "POST" })
-  .validator((d: unknown) => z.object({ refresh: z.boolean().optional() }).optional().parse(d))
+  .inputValidator((d: unknown) => z.object({ refresh: z.boolean().optional() }).optional().parse(d))
   .handler(async () => {
 
     const { getInnertube } = await import("./client");

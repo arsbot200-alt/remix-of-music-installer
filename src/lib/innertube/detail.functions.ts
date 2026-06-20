@@ -210,7 +210,7 @@ export const ytAlbum = createServerFn({ method: "POST" })
   });
 
 export const ytPlaylist = createServerFn({ method: "POST" })
-  .validator((d: any) => z.object({ id: z.string().min(3) }).parse(d))
+  .inputValidator((d: any) => z.object({ id: z.string().min(3) }).parse(d))
   .handler(async ({ data }) => {
     const { getInnertube } = await import("./client");
     const yt = await getInnertube();

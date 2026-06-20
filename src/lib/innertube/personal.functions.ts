@@ -123,7 +123,7 @@ export type PersonalFeed = {
 let personalCache: Record<string, { feed: PersonalFeed; time: number }> = {};
 
 export const ytPersonal = createServerFn({ method: "POST" })
-  .validator((d: any) => {
+  .inputValidator((d: any) => {
     try {
       return z.object({ historySeedId: z.string().optional() }).parse(d);
     } catch {
@@ -242,7 +242,7 @@ export const ytPersonal = createServerFn({ method: "POST" })
 });
 
 export const ytMoreRecommendations = createServerFn({ method: "POST" })
-  .validator((d: any) => z.object({ page: z.number().int().min(1).max(50) }).parse(d))
+  .inputValidator((d: any) => z.object({ page: z.number().int().min(1).max(50) }).parse(d))
   .handler(async ({ data }): Promise<{ title: string; songs: Song[] }> => {
     const { getInnertube } = await import("./client");
     const { getTasteProfile, rotatePick } = await import("./taste.server");
