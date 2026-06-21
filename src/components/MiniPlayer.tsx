@@ -13,7 +13,7 @@ export function MiniPlayer() {
 
   return (
     <div className="fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+58px)] z-30 px-3 miniplayer-enter">
-      <div className="mx-auto max-w-md overflow-hidden rounded-2xl glass shadow-card border border-border/50">
+      <div className="mx-auto max-w-md overflow-hidden rounded-2xl bg-surface/95 backdrop-blur-md border border-border/40">
         {/* Animated progress bar */}
         <div className="h-[3px] bg-surface-2">
           <div
