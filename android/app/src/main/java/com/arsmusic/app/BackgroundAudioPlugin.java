@@ -87,7 +87,7 @@ public class BackgroundAudioPlugin extends Plugin {
   static void emit(String eventName, JSObject payload) {
     BackgroundAudioPlugin plugin = instance.get();
     if (plugin == null || plugin.bridge == null) return;
-    plugin.bridge.executeOnMainThread(() -> plugin.notifyListeners(eventName, payload, true));
+    plugin.bridge.executeOnMainThread(() -> plugin.notifyListeners(eventName, payload, false));
   }
 
   private Intent serviceIntent(String action) {
