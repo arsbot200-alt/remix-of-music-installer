@@ -49,7 +49,11 @@ type BackgroundAudioPlugin = {
 const backgroundAudio = registerPlugin<BackgroundAudioPlugin>("BackgroundAudio");
 
 export function isNativeAndroidAudio() {
-  return typeof window !== "undefined" && Capacitor.isNativePlatform() && Capacitor.getPlatform() === "android";
+  return (
+    typeof window !== "undefined" &&
+    Capacitor.isNativePlatform() &&
+    Capacitor.getPlatform() === "android"
+  );
 }
 
 export function nativeAudioPlay(options: {
