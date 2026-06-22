@@ -341,6 +341,7 @@ public class BackgroundAudioService extends Service {
 
   private Notification notification(boolean loading) {
     Intent launchIntent = getPackageManager().getLaunchIntentForPackage(getPackageName());
+    if (launchIntent == null) launchIntent = new Intent(this, MainActivity.class);
     PendingIntent contentIntent = PendingIntent.getActivity(this, 0, launchIntent, pendingFlags());
     Notification.Builder builder = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
       ? new Notification.Builder(this, CHANNEL_ID)
