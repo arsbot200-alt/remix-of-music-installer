@@ -79,7 +79,7 @@ function Player() {
           style={{ background: `url(${current.thumbnail}) center/cover` }}
         />
       )}
-      <div className="absolute inset-0 bg-gradient-to-b from-background/40 via-background/70 to-background backdrop-blur-2xl" />
+      <div className="absolute inset-0 bg-gradient-to-b from-background/70 via-background/85 to-background" />
       <div className="relative flex min-h-screen flex-col px-6 pb-10 pt-[max(env(safe-area-inset-top),1rem)]">
         <header className="flex items-center justify-between">
           <button onClick={() => router.history.back()} aria-label="Close" className="grid h-9 w-9 place-items-center rounded-full bg-surface/60">
@@ -109,7 +109,7 @@ function Player() {
         </header>
 
         <div className="mt-8 flex justify-center">
-          <div className="aspect-square w-full max-w-xs overflow-hidden rounded-3xl bg-surface shadow-glow">
+          <div className="aspect-square w-full max-w-xs overflow-hidden rounded-2xl bg-surface">
             <FastImage src={current.thumbnail} alt="" eager sizes="320px" className="h-full w-full object-cover" />
           </div>
         </div>
@@ -146,7 +146,7 @@ function Player() {
           <button
             onClick={toggle}
             aria-label={isPlaying ? "Pause" : "Play"}
-            className="grid h-16 w-16 place-items-center rounded-full bg-foreground text-background shadow-glow transition-transform active:scale-95"
+            className="grid h-16 w-16 place-items-center rounded-full bg-foreground text-background transition-transform active:scale-95"
           >
             {loading ? <Loader2 className="h-6 w-6 animate-spin" /> : isPlaying ? <Pause className="h-7 w-7" /> : <Play className="h-7 w-7 translate-x-[2px]" />}
           </button>
