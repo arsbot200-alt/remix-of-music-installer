@@ -346,7 +346,7 @@ public class BackgroundAudioService extends Service {
       ? new Notification.Builder(this, CHANNEL_ID)
       : new Notification.Builder(this);
     builder
-      .setSmallIcon(android.R.drawable.ic_media_play)
+      .setSmallIcon(R.drawable.ic_stat_music_note)
       .setContentTitle(state.title == null ? "ArsMusic" : state.title)
       .setContentText(state.artist == null ? "Playing" : state.artist)
       .setContentIntent(contentIntent)
