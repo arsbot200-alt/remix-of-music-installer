@@ -15,6 +15,7 @@ import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
+import android.os.PowerManager;
 import com.getcapacitor.JSObject;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -167,6 +168,7 @@ public class BackgroundAudioService extends Service {
     startForeground(NOTIFICATION_ID, notification(true));
 
     player = new MediaPlayer();
+    player.setWakeMode(getApplicationContext(), PowerManager.PARTIAL_WAKE_LOCK);
     player.setAudioAttributes(new AudioAttributes.Builder()
       .setUsage(AudioAttributes.USAGE_MEDIA)
       .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
