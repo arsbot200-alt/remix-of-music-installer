@@ -10,6 +10,17 @@ import {
 } from "react";
 import { ytRelated } from "@/lib/innertube/personal.functions";
 import { downloadManager, type DownloadEntry } from "@/lib/downloadManager";
+import {
+  addNativeAudioListener,
+  isNativeAndroidAudio,
+  nativeAudioPause,
+  nativeAudioPlay,
+  nativeAudioResume,
+  nativeAudioSeek,
+  nativeAudioSetVolume,
+  nativeAudioStop,
+  nativeAudioUpdateQueue,
+} from "@/lib/nativeAudio";
 
 export type Track = {
   id: string;
@@ -81,6 +92,12 @@ const LS_MINUTES = "arsmusic.minutes.v1";
 const LS_PLAYLISTS = "arsmusic.playlists.v1";
 const LS_NOT_INTERESTED = "arsmusic.notinterested.v1";
 
+function streamUrlForTrack(id: string, fmt: "progressive" | "mp4" = "mp4") {
+  const path = `/api/public/stream/${encodeURIComponent(id)}?fmt=${fmt}`;
+  if (typeof window === "undefined") return path;
+  return new URL(path, window.location.origin).toString();
+}
+
 function loadJSON<T>(key: string, fallback: T): T {
   if (typeof window === "undefined") return fallback;
   try {
@@ -93,6 +110,7 @@ function loadJSON<T>(key: string, fallback: T): T {
 
 export function PlayerProvider({ children }: { children: ReactNode }) {
   const audioRef = useRef<HTMLMediaElement | null>(null);
+  const nativeAudio = isNativeAndroidAudio();
   const playTokenRef = useRef(0);
   const retryRef = useRef(0);
   const currentTrackRef = useRef<Track | null>(null);
@@ -139,10 +157,11 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
 
   const setVolume = useCallback((v: number) => {
     setVolumeState(v);
+    if (nativeAudio) void nativeAudioSetVolume(v).catch(() => undefined);
     if (audioRef.current) {
       audioRef.current.volume = v;
     }
-  }, []);
+  }, [nativeAudio]);
 
   // Persist
   useEffect(() => { localStorage.setItem(LS_LIKED, JSON.stringify(liked)); }, [liked]);
@@ -274,6 +293,37 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  // Native Android playback state from the foreground media service.
+  useEffect(() => {
+    if (!nativeAudio) return;
+    let active = true;
+    let stateHandle: { remove: () => Promise<void> } | null = null;
+    let errorHandle: { remove: () => Promise<void> } | null = null;
+
+    addNativeAudioListener("playbackState", (state) => {
+      if (!active) return;
+      setPlaying(Boolean(state.isPlaying));
+      setLoading(Boolean(state.loading));
+      setPosition(state.position ?? 0);
+      setDuration(state.duration ?? 0);
+      setError(state.error ?? null);
+      if (typeof state.queueIndex === "number") setIndex(state.queueIndex);
+    }).then((handle) => { stateHandle = handle; }).catch(() => undefined);
+
+    addNativeAudioListener("playbackError", (state) => {
+      if (!active) return;
+      setLoading(false);
+      setPlaying(false);
+      setError(state.error ?? "Playback failed");
+    }).then((handle) => { errorHandle = handle; }).catch(() => undefined);
+
+    return () => {
+      active = false;
+      void stateHandle?.remove();
+      void errorHandle?.remove();
+    };
+  }, [nativeAudio]);
+
   // Screen Wake Lock — keep the radio playing when the screen would otherwise sleep
   // (the OS still allows backgrounded <audio>, this just stops aggressive throttling).
   useEffect(() => {
@@ -310,17 +360,25 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     if (!sleepTimer) return;
     const t = setInterval(() => {
       if (Date.now() >= sleepTimer) {
-        audioRef.current?.pause();
+        if (nativeAudio) void nativeAudioPause().catch(() => undefined);
+        else audioRef.current?.pause();
         setSleepTimer(null);
       }
     }, 1000);
     return () => clearInterval(t);
-  }, [sleepTimer]);
+  }, [sleepTimer, nativeAudio]);
+
+  useEffect(() => {
+    if (!nativeAudio || index < 0 || queue.length === 0) return;
+    void nativeAudioUpdateQueue(queue.map((track) => ({ ...track, url: streamUrlForTrack(track.id, "mp4") })), index)
+      .catch(() => undefined);
+  }, [nativeAudio, queue, index]);
 
   const playIndex = useCallback(
     async (i: number, q: Track[]) => {
       const track = q[i];
-      if (!track || !audioRef.current) return;
+      if (!track) return;
+      if (!nativeAudio && !audioRef.current) return;
       const token = ++playTokenRef.current;
       if (currentTrackRef.current?.id !== track.id) retryRef.current = 0;
       currentTrackRef.current = track;
@@ -334,6 +392,18 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       });
       setHistory((prev) => [track, ...prev].slice(0, 100));
       try {
+        let srcUrl = streamUrlForTrack(track.id);
+        if (nativeAudio) {
+          await nativeAudioPlay({
+            track,
+            url: streamUrlForTrack(track.id, "mp4"),
+            queue: q.map((item) => ({ ...item, url: streamUrlForTrack(item.id, "mp4") })),
+            queueIndex: i,
+            volume,
+          });
+          return;
+        }
+
         if (!audioRef.current) return;
         audioRef.current.pause();
         audioRef.current.removeAttribute("src");
@@ -358,7 +428,6 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         audioRef.current.preload = "auto";
         
         // Check for downloaded blob
-        let srcUrl = `/api/public/stream/${encodeURIComponent(track.id)}?fmt=progressive`;
         if (downloadManager.isDownloaded(track.id)) {
           try {
             const blobUrl = await downloadManager.getPlaybackUrl(track.id);
@@ -378,7 +447,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         setPlaying(false);
       }
     },
-    [],
+    [nativeAudio, volume],
   );
 
   const play = useCallback(
@@ -391,10 +460,17 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   );
 
   const toggle = useCallback(() => {
+    if (!current) return;
+    if (nativeAudio) {
+      void (isPlaying ? nativeAudioPause() : nativeAudioResume()).catch((e: any) => {
+        setError(e?.message ?? "Playback failed");
+      });
+      return;
+    }
     const a = audioRef.current;
-    if (!a || !current) return;
+    if (!a) return;
     if (a.paused) void a.play(); else a.pause();
-  }, [current]);
+  }, [current, isPlaying, nativeAudio]);
 
   const next = useCallback(async () => {
     if (index < 0) return;
@@ -488,8 +564,13 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   }, [current?.id, index, queue, getRelated]);
 
   const seek = useCallback((sec: number) => {
+    if (nativeAudio) {
+      void nativeAudioSeek(sec).catch(() => undefined);
+      setPosition(sec);
+      return;
+    }
     if (audioRef.current) audioRef.current.currentTime = sec;
-  }, []);
+  }, [nativeAudio]);
 
   const toggleLike = useCallback((t?: Track) => {
     const target = t ?? current;
@@ -505,6 +586,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const isLiked = useCallback((id: string) => Boolean(liked[id]), [liked]);
 
   const clear = useCallback(() => {
+    if (nativeAudio) void nativeAudioStop().catch(() => undefined);
     if (audioRef.current) {
       audioRef.current.pause();
       audioRef.current.removeAttribute("src");
@@ -513,7 +595,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     setIndex(-1);
     setQueue([]);
     setPlaying(false);
-  }, []);
+  }, [nativeAudio]);
 
   // Download APIs
   const downloadTrack = useCallback((track: Track) => {

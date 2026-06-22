@@ -40,6 +40,7 @@ export function clearCachedStream(videoId: string) {
   streamCache.delete(cacheKey(videoId));
   streamCache.delete(cacheKey(videoId, "webm"));
   streamCache.delete(cacheKey(videoId, "mp4"));
+  streamCache.delete(cacheKey(videoId, "progressive"));
 }
 
 export function isTrustedAudioUrl(raw: string | null): raw is string {

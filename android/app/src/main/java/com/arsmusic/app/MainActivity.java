@@ -7,6 +7,7 @@ import com.getcapacitor.BridgeActivity;
 public class MainActivity extends BridgeActivity {
   @Override
   public void onCreate(Bundle savedInstanceState) {
+    registerPlugin(BackgroundAudioPlugin.class);
     super.onCreate(savedInstanceState);
     // Allow <audio> to start without a fresh user gesture and keep
     // playing while the app is backgrounded. Without this, Android
@@ -22,10 +23,8 @@ public class MainActivity extends BridgeActivity {
 
   @Override
   public void onPause() {
-    // Skip WebView.onPause() — that call is what suspends background audio.
-    // We deliberately keep the WebView running so MediaSession + <audio>
-    // continue when the user backgrounds the app or locks the screen.
-    // (BridgeActivity → AppCompatActivity → FragmentActivity, all safe.)
+    // Native playback is now handled by BackgroundAudioService, so the WebView
+    // can pause normally without killing music in the Android notification.
     super.onPause();
   }
 }

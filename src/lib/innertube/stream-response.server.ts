@@ -38,10 +38,11 @@ export async function streamAudioResponse(videoId: string, request: Request): Pr
     },
   });
 
-  if (upstream.status === 403) {
+  if ([403, 410, 416].includes(upstream.status)) {
     clearCachedStream(videoId);
     const refreshed = await resolveAudioStream(videoId, { refresh: true, preference });
     contentType = refreshed.contentType;
+    upstreamUrl = refreshed.url;
     upstream = await fetch(refreshed.url, {
       headers: {
         ...(range ? { range } : {}),
